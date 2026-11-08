@@ -19,7 +19,8 @@
         <span>grid<span class="brand-pop">pop</span><small>UM PUZZLE PARA ENTRAR NO RITMO</small></span>
       </a>
       <div class="top-actions">
-        <button class="icon-button" id="sound-toggle" aria-label="Ativar som" title="Som"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12"/></svg></button>
+        <button class="icon-button" id="sound-toggle" aria-label="Ativar efeitos sonoros" aria-pressed="false" title="Efeitos sonoros"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12"/></svg></button>
+        <button class="icon-button" id="music-toggle" aria-label="Ativar música ambiente" aria-pressed="false" title="Música ambiente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
         <button class="icon-button" id="theme-toggle" aria-label="Ativar modo escuro" title="Modo escuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.2A8.5 8.5 0 0 1 8.8 3.8 8.5 8.5 0 1 0 20.2 15.2Z"/></svg></button>
         <button class="icon-button" id="help-button" aria-label="Como jogar" title="Como jogar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.2 1.8c-1.2 1-1.8 1.3-1.8 2.7m0 3h.01"/></svg></button>
       </div>
@@ -39,7 +40,7 @@
         <div class="score-row">
           <div class="score-card"><span class="score-label">PONTUAÇÃO</span><strong id="score">0000</strong></div>
           <div class="score-divider"></div>
-          <div class="combo-card" id="combo-card"><span class="combo-flower">✳</span><span><small>SEQUÊNCIA</small><strong id="combo">× 0</strong></span></div>
+          <div class="combo-card" id="combo-card" title="Jogadas seguidas em que limpas pelo menos uma linha ou coluna. Reinicia quando uma jogada não limpa nenhuma."><span class="combo-flower">✳</span><span><small>SEQUÊNCIA ⓘ</small><strong id="combo">× 0</strong></span></div>
           <button class="restart-button" id="restart-button" aria-label="Novo jogo" title="Novo jogo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.8 10a7.5 7.5 0 0 1 12.8-3L20 9M4 17v-5h5m10.2 2a7.5 7.5 0 0 1-12.8 3L4 15"/></svg></button>
         </div>
 
@@ -50,7 +51,7 @@
 
         <div class="tray-heading"><div><span class="tray-title">AS TUAS PEÇAS</span><span class="tray-hint">ESCOLHE A PRÓXIMA JOGADA</span></div><span class="piece-count"><span class="count-dot"></span> <span id="pieces-left">3</span> PEÇAS</span></div>
         <div class="piece-tray" id="piece-tray" aria-label="Peças disponíveis"></div>
-        <div class="tip-line"><span class="tip-icon">✦</span><span id="tip-text">Liga blocos da mesma cor ou forma um sorriso.</span></div>
+        <div class="tip-line"><span class="tip-icon">✦</span><span id="tip-text">Liga blocos da mesma cor ou forma um sorriso monocromático.</span></div>
         <div class="mobile-footer">FEITO PARA UMA PAUSA BEM JOGADA <span>✳</span></div>
       </section>
     </section>
@@ -63,11 +64,24 @@
       <span class="modal-kicker" id="modal-kicker">GRIDPOP 101</span>
       <h2 id="modal-title">Como jogar</h2>
       <p id="modal-copy">Arrasta uma peça para o tabuleiro ou toca primeiro numa peça e depois no sítio onde a queres colocar.</p>
-      <div class="modal-rules"><div><b>01</b><span>Encosta blocos da mesma cor para ganhar pontos por cada ligação.</span></div><div><b>02</b><span>Forma este rosto com os blocos para o limpar e ganhar 250 pontos.</span><pre class="smile-pattern" aria-label="Padrão do sorriso">·■·■·
+      <div class="modal-rules">
+        <div><b>01</b><span>Encosta blocos da mesma cor para ganhar pontos por cada ligação.</span></div>
+        <div><b>02</b><span>Forma este rosto com blocos todos da mesma cor para o limpar e ganhar 250 pontos.</span><pre class="smile-pattern" aria-label="Padrão do sorriso">·■·■·
 ·····
 ■···■
 ·■·■·
-··■··</pre></div><div><b>03</b><span>Linhas e colunas completas limpam-se como sempre.</span></div></div>
+··■··</pre></div>
+        <div><b>03</b><span>Forma a bola monocromática em filas centradas de 2, 4, 4 e 2 blocos. Limpa os blocos adjacentes e mantém a bola. Vale 500 pontos.</span><pre class="smile-pattern" aria-label="Padrão da bola">·■■·
+■■■■
+■■■■
+·■■·</pre></div>
+        <div><b>04</b><span>Forma esta seta de 7 blocos da mesma cor em qualquer direção ortogonal (↑ ↓ ← →). Coloca um bloco na próxima célula vazia nessa direção.</span><pre class="smile-pattern" aria-label="Padrão da seta para a direita">·······
+·····■·
+··■■■■■
+·····■·
+·······</pre></div>
+        <div><b>05</b><span>SEQUÊNCIA conta quantas jogadas seguidas limpas pelo menos uma linha ou coluna. Uma jogada sem limpeza reinicia a contagem. Cada jogada consecutiva depois da primeira dá 50 pontos extra.</span></div>
+      </div>
       <button class="modal-cta" id="modal-cta">VAMOS A ISSO <span>↗</span></button>
     </section>
   </div>

@@ -2,6 +2,8 @@
   'use strict';
   const SIZE = 10;
   const COLORS = ['#f3775b', '#f1c95c', '#71b8a5', '#aaa0d5'];
+  const AMBIENT_CHORDS = [[261.63,329.63,392.00],[196.00,246.94,293.66],[174.61,220.00,261.63],[196.00,246.94,293.66]];
+  const AMBIENT_NOTES = [523.25,659.25,783.99,659.25,440.00,523.25,659.25,523.25,349.23,440.00,523.25,440.00,392.00,493.88,587.33,493.88];
   const SHAPES = [
     [[0,0]], [[0,0],[0,1]], [[0,0],[0,1],[0,2]], [[0,0],[0,1],[0,2],[0,3]],
     [[0,0],[1,0]], [[0,0],[1,0],[2,0]], [[0,0],[1,0],[2,0],[3,0]],
@@ -41,7 +43,15 @@
   let isResolving = false;
   let gameRun = 0;
   let soundOn = false;
+  let musicOn = false;
   let audio;
+  let musicMaster = null;
+  let musicOscillators = [];
+  let musicBeatTimer = null;
+  let musicChordTimer = null;
+  let musicStep = 0;
+  let musicChord = 0;
+  let triggeredBalls = new Set();
   let toastTimer;
   let messageTimer;
   let pointerStart = null;
@@ -152,10 +162,6 @@
     piece.used = true;
     selected = null;
     playTone(420, .07);
-    const rows = [], cols = [];
-    for (let r = 0; r < SIZE; r++) if (board.slice(r * SIZE, (r + 1) * SIZE).every(Boolean)) rows.push(r);
-    for (let c = 0; c < SIZE; c++) if (Array.from({length: SIZE}, (_,r) => board[r * SIZE + c]).every(Boolean)) cols.push(c);
-    const lineCount = rows.length + cols.length;
     let gained = piece.shape.length * 10;
     const placedIndices = piece.shape.map(([dr, dc]) => (row + dr) * SIZE + col + dc);
     const placedSet = new Set(placedIndices);
@@ -171,56 +177,97 @@
         }
       }
     }
-    const smiles = findSmiles();
-    const smileCells = new Set(smiles.flat());
-    gained += colorLinks * 25 + smiles.length * 250;
+    const symbols = findNewSymbols();
+    const symbolCells = new Set(symbols.filter(symbol => symbol.type !== 'ball').flatMap(symbol => symbol.cells));
+    const ballCells = new Set(symbols.filter(symbol => symbol.type === 'ball').flatMap(symbol => symbol.cells));
+    const arrowTargets = symbols.filter(symbol => symbol.target !== undefined).map(symbol => symbol.target);
+    const symbolBonus = symbols.reduce((total, symbol) => total + symbol.bonus, 0);
+    const resolvedBoard = board.slice();
+    symbols.forEach(symbol => {
+      if (symbol.target !== undefined) resolvedBoard[symbol.target] = symbol.color;
+    });
+    const ballRingCells = new Set();
+    symbols.filter(symbol => symbol.type === 'ball').forEach(symbol => {
+      const ballCells = new Set(symbol.cells);
+      symbol.cells.forEach(index => {
+        const r = Math.floor(index / SIZE), c = index % SIZE;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+          const target = nr * SIZE + nc;
+          if (resolvedBoard[target] && !ballCells.has(target)) ballRingCells.add(target);
+        }
+      });
+    });
+    ballRingCells.forEach(index => { resolvedBoard[index] = null; });
+    symbolCells.forEach(index => { resolvedBoard[index] = null; });
+    const rows = [], cols = [];
+    for (let r = 0; r < SIZE; r++) if (resolvedBoard.slice(r * SIZE, (r + 1) * SIZE).every(Boolean)) rows.push(r);
+    for (let c = 0; c < SIZE; c++) if (Array.from({length: SIZE}, (_,r) => resolvedBoard[r * SIZE + c]).every(Boolean)) cols.push(c);
+    const lineCount = rows.length + cols.length;
+    gained += colorLinks * 25 + symbolBonus;
+    const cleared = new Set([...symbolCells, ...ballRingCells]);
+    rows.forEach(r => { for (let c = 0; c < SIZE; c++) cleared.add(r * SIZE + c); });
+    cols.forEach(c => { for (let r = 0; r < SIZE; r++) cleared.add(r * SIZE + c); });
     if (lineCount) {
       combo++;
       gained += lineCount * 100 + (lineCount > 1 ? (lineCount - 1) * 50 : 0) + Math.max(0, combo - 1) * 50;
       comboEl.textContent = `× ${combo}`;
       comboCard.classList.add('active');
-      const cleared = new Set(smileCells);
-      rows.forEach(r => { for (let c = 0; c < SIZE; c++) cleared.add(r * SIZE + c); });
-      cols.forEach(c => { for (let r = 0; r < SIZE; r++) cleared.add(r * SIZE + c); });
-      cleared.forEach(i => cells[i].classList.add('clearing'));
-      isResolving = true;
-      setTimeout(() => {
-        if (currentRun !== gameRun) return;
-        cleared.forEach(i => { board[i] = null; cells[i].classList.remove('clearing'); });
-        renderBoard();
-        isResolving = false;
-        checkGameOver();
-      }, 260);
-      showMessage(smiles.length ? `SORRISO! +${smiles.length * 250}` : colorLinks ? `LIGAÇÃO! +${colorLinks * 25}` : lineCount > 1 ? `${lineCount} LINHAS!` : combo > 1 ? `× ${combo} COMBO!` : 'BOA!');
-      playTone(lineCount > 1 ? 720 : 570, .12);
-      if (smiles.length) tipEl.textContent = 'Sorriso encontrado! Procura outra forma escondida.';
-      else if (colorLinks) tipEl.textContent = `${colorLinks} ligação${colorLinks > 1 ? 'ões' : ''} de cor. Continua a ligar!`;
-      else tipEl.textContent = lineCount > 1 ? 'Várias linhas de uma vez: isso é que é ritmo.' : combo > 1 ? `${combo} limpezas seguidas. Continua assim!` : 'Boa! Mantém as limpezas a acontecer.';
     } else {
       combo = 0;
       comboEl.textContent = '× 0';
       comboCard.classList.remove('active');
-      if (smiles.length) {
-        smileCells.forEach(i => cells[i].classList.add('clearing'));
-        isResolving = true;
-        setTimeout(() => {
-          if (currentRun !== gameRun) return;
-          smileCells.forEach(i => { board[i] = null; cells[i].classList.remove('clearing'); });
-          renderBoard();
-          isResolving = false;
-          checkGameOver();
-        }, 260);
-        showMessage('SORRISO! +250');
-        tipEl.textContent = 'Sorriso encontrado! Procura outra forma escondida.';
-        playTone(760, .16);
-      } else if (colorLinks) {
-        showMessage(`LIGAÇÃO! +${colorLinks * 25}`);
-        tipEl.textContent = `${colorLinks} ligação${colorLinks > 1 ? 'ões' : ''} de cor. Continua a ligar!`;
-      }
     }
-    if (lineCount && smiles.length) showMessage(`SORRISO! +${smiles.length * 250}`);
-    if (lineCount && !smiles.length && !colorLinks) {
+    if (cleared.size) {
+      cleared.forEach(i => cells[i].classList.add('clearing'));
+      symbolCells.forEach((i, order) => {
+        cells[i].classList.add('symbol-clearing');
+        cells[i].style.setProperty('--symbol-delay', `${Math.min(order, 6) * 25}ms`);
+      });
+      ballRingCells.forEach((i, order) => {
+        cells[i].classList.add('ball-clearing');
+        cells[i].style.setProperty('--ball-delay', `${Math.min(order, 7) * 25}ms`);
+      });
+      ballCells.forEach(i => cells[i].classList.add('ball-source'));
+      isResolving = true;
+      setTimeout(() => {
+        if (currentRun !== gameRun) return;
+        board = resolvedBoard;
+        cleared.forEach(i => {
+          board[i] = null;
+          cells[i].classList.remove('clearing', 'symbol-clearing', 'ball-clearing', 'ball-source');
+          cells[i].style.removeProperty('--symbol-delay');
+          cells[i].style.removeProperty('--ball-delay');
+        });
+        ballCells.forEach(i => cells[i].classList.remove('ball-source'));
+        arrowTargets.filter(target => !cleared.has(target)).forEach(target => cells[target].classList.add('arrow-spawn'));
+        renderBoard();
+        arrowTargets.filter(target => !cleared.has(target)).forEach(target => setTimeout(() => cells[target].classList.remove('arrow-spawn'), 650));
+        isResolving = false;
+        pruneBallTriggers();
+        checkGameOver();
+      }, symbols.length ? 800 : 260);
+    } else if (ballCells.size) {
+      ballCells.forEach(i => cells[i].classList.add('ball-source'));
+      setTimeout(() => { if (currentRun === gameRun) ballCells.forEach(i => cells[i].classList.remove('ball-source')); }, 850);
+    }
+    if (symbols.length) {
+      const names = { smile: 'SORRISO', ball: 'BOLA', arrow: 'SETA' };
+      const symbolLabel = symbols.length > 1 ? 'SÍMBOLOS' : names[symbols[0].type];
+      showMessage(`${symbolLabel}! +${symbolBonus}`, true, symbols[0].icon);
+      tipEl.textContent = symbols.some(symbol => symbol.type === 'arrow') ? 'A seta lançou um bloco na direção da ponta.' : symbols.some(symbol => symbol.type === 'ball') ? 'A bola limpou o anel à sua volta e ficou no tabuleiro.' : 'Símbolo monocromático encontrado! Procura outra forma.';
+      const firstType = symbols[0].type;
+      playNotes(firstType === 'arrow' ? [440, 587.33, 880] : firstType === 'ball' ? [392, 523.25, 659.25, 783.99] : [523.25, 659.25, 783.99, 1046.5], .08);
+    } else if (lineCount) {
+      showMessage(colorLinks ? `LINHAS! +${lineCount * 100} · CORES!` : lineCount > 1 ? `${lineCount} LINHAS!` : combo > 1 ? `× ${combo} COMBO!` : 'BOA!');
+      playNotes(lineCount > 1 ? [523.25, 659.25, 783.99] : [659.25, 783.99], .08);
       tipEl.textContent = lineCount > 1 ? 'Várias linhas de uma vez: isso é que é ritmo.' : combo > 1 ? `${combo} limpezas seguidas. Continua assim!` : 'Boa! Mantém as limpezas a acontecer.';
+    } else if (colorLinks) {
+      showMessage(`LIGAÇÃO! +${colorLinks * 25}`);
+      tipEl.textContent = `${colorLinks} ligação${colorLinks > 1 ? 'ões' : ''} de cor. Continua a ligar!`;
+      playNotes([659.25, 880], .07);
     }
     score += gained;
     scoreEl.textContent = pad(score);
@@ -234,15 +281,58 @@
     if (pieces.every(p => p.used)) dealPieces();
     if (!isResolving) setTimeout(() => { if (currentRun === gameRun) checkGameOver(); }, 0);
   }
-  function findSmiles() {
-    const pattern = [[0,1],[0,3],[2,0],[2,4],[3,1],[3,3],[4,2]];
+  function findSymbols() {
     const found = [];
-    for (let r = 0; r <= SIZE - 5; r++) for (let c = 0; c <= SIZE - 5; c++) {
-      if (pattern.every(([dr, dc]) => board[(r + dr) * SIZE + c + dc])) {
-        found.push(pattern.map(([dr, dc]) => (r + dr) * SIZE + c + dc));
+    const reserved = new Set();
+    const addPattern = (type, points, icon, height, width, pattern, directions = null) => {
+      for (let r = 0; r <= SIZE - height; r++) for (let c = 0; c <= SIZE - width; c++) {
+        const indices = pattern.map(([dr, dc]) => (r + dr) * SIZE + c + dc);
+        if (indices.some(index => reserved.has(index))) continue;
+        const color = board[indices[0]];
+        if (!color || indices.some(index => board[index] !== color)) continue;
+        let target;
+        let arrow = icon;
+        if (directions) {
+          const [dr, dc, tr, tc, directionIcon] = directions;
+          let targetRow = r + tr, targetCol = c + tc;
+          while (targetRow >= 0 && targetRow < SIZE && targetCol >= 0 && targetCol < SIZE) {
+            const candidate = targetRow * SIZE + targetCol;
+            if (!board[candidate]) { target = candidate; break; }
+            targetRow += dr;
+            targetCol += dc;
+          }
+          if (target === undefined) continue;
+          arrow = directionIcon;
+        }
+        indices.forEach(index => reserved.add(index));
+        found.push({ type, bonus: points, icon: arrow, cells: indices, color, row: r, col: c, height, width, ...(target === undefined ? {} : { target }) });
       }
-    }
+    };
+    addPattern('smile', 250, '☺', 5, 5, [[0,1],[0,3],[2,0],[2,4],[3,1],[3,3],[4,2]]);
+    const ball = [[0,1],[0,2], ...[0,1,2,3].map(c => [1,c]), ...[0,1,2,3].map(c => [2,c]), [3,1],[3,2]];
+    addPattern('ball', 500, '⚽', 4, 4, ball);
+    const right = [[2,2],[2,3],[2,4],[2,5],[2,6],[1,5],[3,5]];
+    const left = right.map(([r,c]) => [r,6-c]);
+    const down = right.map(([r,c]) => [c,r]);
+    const up = right.map(([r,c]) => [6-c,r]);
+    addPattern('arrow', 150, '→', 5, 7, right, [0,1,2,7,'→']);
+    addPattern('arrow', 150, '←', 5, 7, left, [0,-1,2,-1,'←']);
+    addPattern('arrow', 150, '↓', 7, 5, down, [1,0,7,2,'↓']);
+    addPattern('arrow', 150, '↑', 7, 5, up, [-1,0,-1,2,'↑']);
     return found;
+  }
+  function ballKey(symbol) { return `${symbol.row}:${symbol.col}:${symbol.color}`; }
+  function findNewSymbols() {
+    const matches = findSymbols();
+    const activeBallKeys = new Set(matches.filter(symbol => symbol.type === 'ball').map(ballKey));
+    triggeredBalls = new Set([...triggeredBalls].filter(key => activeBallKeys.has(key)));
+    const fresh = matches.filter(symbol => symbol.type !== 'ball' || !triggeredBalls.has(ballKey(symbol)));
+    fresh.filter(symbol => symbol.type === 'ball').forEach(symbol => triggeredBalls.add(ballKey(symbol)));
+    return fresh;
+  }
+  function pruneBallTriggers() {
+    const activeBallKeys = new Set(findSymbols().filter(symbol => symbol.type === 'ball').map(ballKey));
+    triggeredBalls = new Set([...triggeredBalls].filter(key => activeBallKeys.has(key)));
   }
   function hasMove() {
     return pieces.some(piece => !piece.used && Array.from({length: SIZE * SIZE}, (_, i) => canPlace(piece, Math.floor(i / SIZE), i % SIZE)).some(Boolean));
@@ -260,23 +350,138 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1700);
   }
-  function showMessage(text) {
+  function showMessage(text, symbol = false, icon = '☺') {
     messageEl.textContent = text;
+    messageEl.classList.toggle('symbol-message', symbol);
+    if (symbol) messageEl.dataset.symbol = icon;
+    else delete messageEl.dataset.symbol;
     messageEl.classList.add('show');
     clearTimeout(messageTimer);
-    messageTimer = setTimeout(() => messageEl.classList.remove('show'), 850);
+    messageTimer = setTimeout(() => { messageEl.classList.remove('show', 'symbol-message'); delete messageEl.dataset.symbol; }, 1000);
   }
   function playTone(frequency, duration) {
     if (!soundOn) return;
     try {
-      audio ||= new (window.AudioContext || window.webkitAudioContext)();
-      if (audio.state === 'suspended') audio.resume();
+      getAudioContext();
       const oscillator = audio.createOscillator(), gain = audio.createGain();
       oscillator.type = 'sine'; oscillator.frequency.value = frequency;
       gain.gain.setValueAtTime(.055, audio.currentTime);
       gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
       oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + duration);
     } catch { /* Audio is optional. */ }
+  }
+  function getAudioContext() {
+    if (!audio) {
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      audio.addEventListener('statechange', () => {
+        if (audio.state === 'running' && musicOn) startAmbientLoops();
+      });
+    }
+    if (audio.state === 'suspended') audio.resume().catch(() => {});
+    return audio;
+  }
+  function playNotes(frequencies, spacing = .08) {
+    if (!soundOn) return;
+    try {
+      getAudioContext();
+      frequencies.forEach((frequency, index) => {
+        const oscillator = audio.createOscillator();
+        const envelope = audio.createGain();
+        const start = audio.currentTime + index * spacing;
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(frequency, start);
+        envelope.gain.setValueAtTime(.0001, start);
+        envelope.gain.exponentialRampToValueAtTime(.045, start + .012);
+        envelope.gain.exponentialRampToValueAtTime(.0001, start + .13);
+        oscillator.connect(envelope);
+        envelope.connect(audio.destination);
+        oscillator.start(start);
+        oscillator.stop(start + .15);
+      });
+    } catch { /* Audio is optional. */ }
+  }
+  function startAmbientMusic() {
+    try {
+      getAudioContext();
+      if (musicMaster) return;
+      musicMaster = audio.createGain();
+      musicMaster.gain.setValueAtTime(0, audio.currentTime);
+      musicMaster.gain.linearRampToValueAtTime(.42, audio.currentTime + 1.4);
+      musicMaster.connect(audio.destination);
+      musicOscillators = AMBIENT_CHORDS[0].map((frequency, index) => {
+        const oscillator = audio.createOscillator();
+        const voiceGain = audio.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = frequency;
+        voiceGain.gain.value = [.08, .05, .035][index];
+        oscillator.connect(voiceGain);
+        voiceGain.connect(musicMaster);
+        oscillator.start();
+        return oscillator;
+      });
+      musicStep = 0;
+      musicChord = 0;
+      if (audio.state === 'running') startAmbientLoops();
+    } catch {
+      musicOn = false;
+      const button = document.querySelector('#music-toggle');
+      button.classList.remove('music-on');
+      button.setAttribute('aria-label', 'Ativar música ambiente');
+      button.setAttribute('aria-pressed', 'false');
+      setToast('Não foi possível iniciar a música neste navegador.');
+    }
+  }
+  function startAmbientLoops() {
+    if (!musicOn || !musicMaster || audio.state !== 'running' || musicBeatTimer) return;
+    musicChordTimer = setInterval(() => {
+      if (!musicOn || !musicMaster) return;
+      musicChord = (musicChord + 1) % AMBIENT_CHORDS.length;
+      AMBIENT_CHORDS[musicChord].forEach((frequency, index) => {
+        const parameter = musicOscillators[index].frequency;
+        parameter.cancelScheduledValues(audio.currentTime);
+        parameter.setValueAtTime(frequency, audio.currentTime);
+      });
+    }, 8000);
+    const playAmbientNote = () => {
+      if (!musicOn || !musicMaster || audio.state !== 'running') return;
+      const oscillator = audio.createOscillator();
+      const envelope = audio.createGain();
+      const now = audio.currentTime;
+      oscillator.type = 'triangle';
+      oscillator.frequency.value = AMBIENT_NOTES[musicStep % AMBIENT_NOTES.length];
+      musicStep++;
+      envelope.gain.setValueAtTime(.0001, now);
+      envelope.gain.exponentialRampToValueAtTime(.075, now + .025);
+      envelope.gain.exponentialRampToValueAtTime(.0001, now + .18);
+      oscillator.connect(envelope);
+      envelope.connect(musicMaster);
+      oscillator.start(now);
+      oscillator.stop(now + .2);
+    };
+    playAmbientNote();
+    musicBeatTimer = setInterval(playAmbientNote, 500);
+  }
+  function stopAmbientMusic() {
+    clearInterval(musicBeatTimer);
+    clearInterval(musicChordTimer);
+    musicBeatTimer = musicChordTimer = null;
+    if (!musicMaster || !audio) return;
+    const master = musicMaster;
+    const now = audio.currentTime;
+    if (audio.state === 'suspended') {
+      musicOscillators.forEach(oscillator => { try { oscillator.stop(); } catch { /* Already stopped. */ } });
+      try { master.disconnect(); } catch { /* Already disconnected. */ }
+      musicOscillators = [];
+      musicMaster = null;
+      return;
+    }
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(Math.max(master.gain.value, .0001), now);
+    master.gain.linearRampToValueAtTime(.0001, now + .55);
+    musicOscillators.forEach(oscillator => { try { oscillator.stop(now + .6); } catch { /* Already stopped. */ } });
+    setTimeout(() => { try { master.disconnect(); } catch { /* Already disconnected. */ } }, 700);
+    musicOscillators = [];
+    musicMaster = null;
   }
   function openModal({ over = false, restart = false } = {}) {
     pendingRestart = restart;
@@ -291,9 +496,11 @@
     gameRun++;
     isResolving = false;
     pointerStart = null;
+    triggeredBalls.clear();
     board = Array(SIZE * SIZE).fill(null); score = 0; combo = 0; isOver = false; selected = null;
     scoreEl.textContent = '0000'; comboEl.textContent = '× 0'; comboCard.classList.remove('active');
-    messageEl.classList.remove('show'); tipEl.textContent = 'Liga blocos da mesma cor ou forma um sorriso.';
+    messageEl.classList.remove('show', 'symbol-message'); delete messageEl.dataset.symbol;
+    tipEl.textContent = 'Liga blocos da mesma cor ou forma um sorriso monocromático.';
     makeBoard(); dealPieces(); modalEl.hidden = true;
   }
   document.addEventListener('pointermove', event => {
@@ -323,10 +530,24 @@
   });
   document.querySelector('#sound-toggle').addEventListener('click', event => {
     soundOn = !soundOn;
-    event.currentTarget.setAttribute('aria-label', soundOn ? 'Desativar som' : 'Ativar som');
+    event.currentTarget.setAttribute('aria-label', soundOn ? 'Desativar efeitos sonoros' : 'Ativar efeitos sonoros');
+    event.currentTarget.setAttribute('aria-pressed', String(soundOn));
     event.currentTarget.classList.toggle('sound-on', soundOn);
-    setToast(soundOn ? 'Som ativado.' : 'Som desativado.');
+    setToast(soundOn ? 'Efeitos sonoros ativados.' : 'Efeitos sonoros desativados.');
     if (soundOn) playTone(520, .08);
+  });
+  document.querySelector('#music-toggle').addEventListener('click', event => {
+    musicOn = !musicOn;
+    event.currentTarget.classList.toggle('music-on', musicOn);
+    event.currentTarget.setAttribute('aria-label', musicOn ? 'Desativar música ambiente' : 'Ativar música ambiente');
+    event.currentTarget.setAttribute('aria-pressed', String(musicOn));
+    if (musicOn) {
+      startAmbientMusic();
+      if (musicOn) setToast('Música ambiente ativada.');
+    } else {
+      stopAmbientMusic();
+      setToast('Música ambiente desativada.');
+    }
   });
   themeToggle.addEventListener('click', () => setTheme(!document.body.classList.contains('dark-mode')));
   document.querySelector('#help-button').addEventListener('click', () => openModal());
@@ -335,7 +556,23 @@
   modalCta.addEventListener('click', () => { if (pendingRestart || isOver) newGame(); else modalEl.hidden = true; });
   modalEl.addEventListener('click', event => { if (event.target === modalEl && !isOver) modalEl.hidden = true; });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && !isOver) modalEl.hidden = true; });
+  const unlockAudio = () => {
+    if (audio?.state === 'suspended') audio.resume().catch(() => {});
+  };
+  document.addEventListener('pointerdown', unlockAudio, { once: true });
+  document.addEventListener('keydown', unlockAudio, { once: true });
   bestEl.textContent = pad(best);
+  soundOn = true;
+  musicOn = true;
+  const soundToggle = document.querySelector('#sound-toggle');
+  const musicToggle = document.querySelector('#music-toggle');
+  soundToggle.classList.add('sound-on');
+  soundToggle.setAttribute('aria-label', 'Desativar efeitos sonoros');
+  soundToggle.setAttribute('aria-pressed', 'true');
+  musicToggle.classList.add('music-on');
+  musicToggle.setAttribute('aria-label', 'Desativar música ambiente');
+  musicToggle.setAttribute('aria-pressed', 'true');
   setTheme(readTheme());
+  startAmbientMusic();
   makeBoard(); dealPieces();
 })();
