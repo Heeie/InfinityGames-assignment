@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fbf8f1">
+  <meta name="description" content="GridPOP — encaixa as peças, limpa o tabuleiro e bate o teu recorde.">
+  <title>GridPOP — um puzzle para entrar no ritmo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="GridPOP início">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>grid<span class="brand-pop">pop</span><small>UM PUZZLE PARA ENTRAR NO RITMO</small></span>
+      </a>
+      <div class="top-actions">
+        <button class="icon-button" id="sound-toggle" aria-label="Ativar som" title="Som"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12"/></svg></button>
+        <button class="icon-button" id="theme-toggle" aria-label="Ativar modo escuro" title="Modo escuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.2A8.5 8.5 0 0 1 8.8 3.8 8.5 8.5 0 1 0 20.2 15.2Z"/></svg></button>
+        <button class="icon-button" id="help-button" aria-label="Como jogar" title="Como jogar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.2 1.8c-1.2 1-1.8 1.3-1.8 2.7m0 3h.01"/></svg></button>
+      </div>
+    </header>
+
+    <section class="game-layout" aria-label="Jogo GridPOP">
+      <aside class="intro-column">
+        <div class="eyebrow"><span class="live-dot"></span> O TEU MOMENTO DE PAUSA</div>
+        <h1>Encaixa.<br>Limpa.<br><span>Repete.</span></h1>
+        <p class="intro-copy">Liga cores, forma símbolos e limpa o tabuleiro. Cada jogada pode ter uma surpresa.</p>
+        <div class="rule-card"><span class="rule-icon">✳</span><p><strong>Pequenas jogadas.</strong><br>Grandes sequências.</p><span class="rule-arrow">↘</span></div>
+        <div class="best-card"><span class="best-icon">↗</span><span><small>O TEU RECORDE</small><strong id="best-score">0000</strong></span><span class="best-sparkle">✳</span></div>
+        <p class="fine-print">SEM PRESSA. SÓ MAIS UMA PEÇA.</p>
+      </aside>
+
+      <section class="play-area" aria-label="Área de jogo">
+        <div class="score-row">
+          <div class="score-card"><span class="score-label">PONTUAÇÃO</span><strong id="score">0000</strong></div>
+          <div class="score-divider"></div>
+          <div class="combo-card" id="combo-card"><span class="combo-flower">✳</span><span><small>SEQUÊNCIA</small><strong id="combo">× 0</strong></span></div>
+          <button class="restart-button" id="restart-button" aria-label="Novo jogo" title="Novo jogo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.8 10a7.5 7.5 0 0 1 12.8-3L20 9M4 17v-5h5m10.2 2a7.5 7.5 0 0 1-12.8 3L4 15"/></svg></button>
+        </div>
+
+        <div class="board-wrap">
+          <div id="board" class="board" role="grid" aria-label="Tabuleiro de 10 por 10"></div>
+          <div id="board-message" class="board-message" aria-live="polite"></div>
+        </div>
+
+        <div class="tray-heading"><div><span class="tray-title">AS TUAS PEÇAS</span><span class="tray-hint">ESCOLHE A PRÓXIMA JOGADA</span></div><span class="piece-count"><span class="count-dot"></span> <span id="pieces-left">3</span> PEÇAS</span></div>
+        <div class="piece-tray" id="piece-tray" aria-label="Peças disponíveis"></div>
+        <div class="tip-line"><span class="tip-icon">✦</span><span id="tip-text">Liga blocos da mesma cor ou forma um sorriso.</span></div>
+        <div class="mobile-footer">FEITO PARA UMA PAUSA BEM JOGADA <span>✳</span></div>
+      </section>
+    </section>
+    <footer class="desktop-footer"><span>GRIDPOP <span class="footer-star">✳</span> UM CLÁSSICO, AO TEU RITMO.</span><span>UMA PEÇA DE CADA VEZ.</span></footer>
+  </main>
+
+  <div class="modal-backdrop" id="modal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" id="modal-close" aria-label="Fechar">×</button>
+      <span class="modal-kicker" id="modal-kicker">GRIDPOP 101</span>
+      <h2 id="modal-title">Como jogar</h2>
+      <p id="modal-copy">Arrasta uma peça para o tabuleiro ou toca primeiro numa peça e depois no sítio onde a queres colocar.</p>
+      <div class="modal-rules"><div><b>01</b><span>Encosta blocos da mesma cor para ganhar pontos por cada ligação.</span></div><div><b>02</b><span>Forma este rosto com os blocos para o limpar e ganhar 250 pontos.</span><pre class="smile-pattern" aria-label="Padrão do sorriso">·■·■·
+·····
+■···■
+·■·■·
+··■··</pre></div><div><b>03</b><span>Linhas e colunas completas limpam-se como sempre.</span></div></div>
+      <button class="modal-cta" id="modal-cta">VAMOS A ISSO <span>↗</span></button>
+    </section>
+  </div>
+  <div class="toast" id="toast" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>
